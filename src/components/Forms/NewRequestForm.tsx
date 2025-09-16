@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, Dog, Calendar, MapPin, DollarSign, FileText } from 'lucide-react';
-import { SERVICE_TYPES, NEIGHBORHOODS } from '../../types';
-import { useAuth } from '../../hooks/useAuth';
+import { X } from "lucide-react";
+import React, { useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
+import { createDogThenRequest } from "../../lib/api";
+import { NEIGHBORHOODS, SERVICE_TYPES } from "../../types";
 
 interface NewRequestFormProps {
   isOpen: boolean;
@@ -9,23 +10,28 @@ interface NewRequestFormProps {
   onSubmit: (requestData: any) => void;
 }
 
-const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubmit }) => {
+const NewRequestForm: React.FC<NewRequestFormProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+}) => {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    serviceType: '',
-    date: '',
-    time: '',
-    dogName: 'מקס',
-    dogBreed: 'לברדור',
+    serviceType: "",
+    date: "",
+    time: "",
+    dogName: "מקס",
+    dogBreed: "לברדור",
     dogAge: 3,
-    dogSize: 'large',
-    dogImage: 'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=400',
-    additionalInfo: 'אוהב לשחק עם כלבים אחרים',
-    neighborhood: user?.neighborhood || '',
-    specialInstructions: '',
-    offeredPrice: '',
-    flexible: false
+    dogSize: "large",
+    dogImage:
+      "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=400",
+    additionalInfo: "אוהב לשחק עם כלבים אחרים",
+    neighborhood: user?.neighborhood || "",
+    specialInstructions: "",
+    offeredPrice: "",
+    flexible: false,
   });
 
   if (!isOpen) return null;
@@ -38,7 +44,28 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
     if (step > 1) setStep(step - 1);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!user) return;
+    await createDogThenRequest({
+      client_id: user.id,
+      dog: {
+        name: formData.dogName,
+        breed: formData.dogBreed,
+        age: formData.dogAge,
+        size: formData.dogSize as any,
+        image: formData.dogImage,
+        additional_info: formData.additionalInfo,
+      },
+      request: {
+        service_type: formData.serviceType as any,
+        date: formData.date,
+        time: formData.time,
+        neighborhood: formData.neighborhood,
+        special_instructions: formData.specialInstructions,
+        offered_price_cents: Math.round(Number(formData.offeredPrice) * 100),
+        flexible: formData.flexible,
+      },
+    });
     onSubmit(formData);
     onClose();
     setStep(1);
@@ -47,40 +74,54 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
   const renderStep1 = () => (
     <div className="space-y-4">
       <h3 className="font-semibold text-lg">פרטי השירות</h3>
-      
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">סוג שירות</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          סוג שירות
+        </label>
         <select
           value={formData.serviceType}
-          onChange={(e) => setFormData(prev => ({ ...prev, serviceType: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, serviceType: e.target.value }))
+          }
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           required
         >
           <option value="">בחר סוג שירות</option>
           {Object.entries(SERVICE_TYPES).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
+            <option key={key} value={key}>
+              {label}
+            </option>
           ))}
         </select>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">תאריך</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            תאריך
+          </label>
           <input
             type="date"
             value={formData.date}
-            onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-            min={new Date().toISOString().split('T')[0]}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, date: e.target.value }))
+            }
+            min={new Date().toISOString().split("T")[0]}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">שעה</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            שעה
+          </label>
           <input
             type="time"
             value={formData.time}
-            onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, time: e.target.value }))
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           />
@@ -92,24 +133,32 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
   const renderStep2 = () => (
     <div className="space-y-4">
       <h3 className="font-semibold text-lg">פרטי הכלב</h3>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">שם הכלב</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            שם הכלב
+          </label>
           <input
             type="text"
             value={formData.dogName}
-            onChange={(e) => setFormData(prev => ({ ...prev, dogName: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, dogName: e.target.value }))
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">גזע</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            גזע
+          </label>
           <input
             type="text"
             value={formData.dogBreed}
-            onChange={(e) => setFormData(prev => ({ ...prev, dogBreed: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, dogBreed: e.target.value }))
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           />
@@ -118,22 +167,33 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">גיל</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            גיל
+          </label>
           <input
             type="number"
             min="0"
             max="25"
             value={formData.dogAge}
-            onChange={(e) => setFormData(prev => ({ ...prev, dogAge: parseInt(e.target.value) }))}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                dogAge: parseInt(e.target.value),
+              }))
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">גודל</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            גודל
+          </label>
           <select
             value={formData.dogSize}
-            onChange={(e) => setFormData(prev => ({ ...prev, dogSize: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, dogSize: e.target.value }))
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           >
@@ -145,10 +205,14 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">מידע נוסף</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          מידע נוסף
+        </label>
         <textarea
           value={formData.additionalInfo}
-          onChange={(e) => setFormData(prev => ({ ...prev, additionalInfo: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, additionalInfo: e.target.value }))
+          }
           rows={3}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="מידע נוסף על הכלב..."
@@ -160,27 +224,40 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
   const renderStep3 = () => (
     <div className="space-y-4">
       <h3 className="font-semibold text-lg">מיקום והוראות</h3>
-      
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">שכונה</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          שכונה
+        </label>
         <select
           value={formData.neighborhood}
-          onChange={(e) => setFormData(prev => ({ ...prev, neighborhood: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, neighborhood: e.target.value }))
+          }
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           required
         >
           <option value="">בחר שכונה</option>
           {NEIGHBORHOODS.map((neighborhood) => (
-            <option key={neighborhood} value={neighborhood}>{neighborhood}</option>
+            <option key={neighborhood} value={neighborhood}>
+              {neighborhood}
+            </option>
           ))}
         </select>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">הוראות מיוחדות</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          הוראות מיוחדות
+        </label>
         <textarea
           value={formData.specialInstructions}
-          onChange={(e) => setFormData(prev => ({ ...prev, specialInstructions: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              specialInstructions: e.target.value,
+            }))
+          }
           rows={4}
           maxLength={200}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -196,14 +273,18 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
   const renderStep4 = () => (
     <div className="space-y-4">
       <h3 className="font-semibold text-lg">תמחור וביטול</h3>
-      
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">מחיר מוצע (₪)</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          מחיר מוצע (₪)
+        </label>
         <input
           type="number"
           min="30"
           value={formData.offeredPrice}
-          onChange={(e) => setFormData(prev => ({ ...prev, offeredPrice: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, offeredPrice: e.target.value }))
+          }
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="מינימום 30 ₪"
           required
@@ -215,7 +296,9 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
           type="checkbox"
           id="flexible"
           checked={formData.flexible}
-          onChange={(e) => setFormData(prev => ({ ...prev, flexible: e.target.checked }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, flexible: e.target.checked }))
+          }
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
         <label htmlFor="flexible" className="text-sm text-gray-700">
@@ -237,12 +320,13 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
   const renderStep5 = () => (
     <div className="space-y-4">
       <h3 className="font-semibold text-lg">סיכום ואישור</h3>
-      
+
       <div className="space-y-4">
         <div className="p-4 bg-blue-50 rounded-lg">
           <h4 className="font-medium text-blue-900 mb-2">פרטי השירות</h4>
           <p className="text-sm text-blue-800">
-            {SERVICE_TYPES[formData.serviceType as keyof typeof SERVICE_TYPES]} • {formData.date} • {formData.time}
+            {SERVICE_TYPES[formData.serviceType as keyof typeof SERVICE_TYPES]}{" "}
+            • {formData.date} • {formData.time}
           </p>
         </div>
 
@@ -256,7 +340,8 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
         <div className="p-4 bg-purple-50 rounded-lg">
           <h4 className="font-medium text-purple-900 mb-2">מיקום ומחיר</h4>
           <p className="text-sm text-purple-800">
-            {formData.neighborhood} • ₪{formData.offeredPrice} {formData.flexible && '(גמיש)'}
+            {formData.neighborhood} • ₪{formData.offeredPrice}{" "}
+            {formData.flexible && "(גמיש)"}
           </p>
         </div>
       </div>
@@ -326,7 +411,10 @@ const NewRequestForm: React.FC<NewRequestFormProps> = ({ isOpen, onClose, onSubm
             <button
               onClick={handleNext}
               disabled={
-                (step === 1 && (!formData.serviceType || !formData.date || !formData.time)) ||
+                (step === 1 &&
+                  (!formData.serviceType ||
+                    !formData.date ||
+                    !formData.time)) ||
                 (step === 2 && (!formData.dogName || !formData.dogBreed)) ||
                 (step === 3 && !formData.neighborhood) ||
                 (step === 4 && !formData.offeredPrice)
