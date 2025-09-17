@@ -108,6 +108,7 @@ console.log({currentStep, formData, userType})
   };
 
   const resetForm = () => {
+    localStorage.removeItem('dogSitterForm');
     setStep("choice");
     setCurrentStep(1);
     setUserType(null);
@@ -831,23 +832,29 @@ const handleFileChange = async (field: string, file: File | null) => {
                 type="button"
                 onClick={async () => {
                     try {
-                    const res = await fetch(
-                        `${supabaseUrl}/functions/v1/verify-otp`,
-                        {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseAnonKey}`, "apikey": supabaseAnonKey },
-                        body: JSON.stringify({
-                            user_id: formData.userId,
-                            otp: formData.verificationCode,
-                            // password: formData.password, // 👈 ensure you have this in formData
-                        }),
-                        }
-                    );
+                    // const res = await fetch(
+                    //     `${supabaseUrl}/functions/v1/verify-otp`,
+                    //     {
+                    //     method: "POST",
+                    //     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseAnonKey}`, "apikey": supabaseAnonKey },
+                    //     body: JSON.stringify({
+                    //         user_id: formData.userId,
+                    //         otp: formData.verificationCode,
+                    //         // password: formData.password, // 👈 ensure you have this in formData
+                    //     }),
+                    //     }
+                    // );
 
-                    const data = await res.json();
+                    // const data = await res.json();
+                    
+                     const {data, error} = await supabase.auth.verifyOtp({
+                        email: formData.email,
+                        token: formData.verificationCode,
+                        type: "signup",
+                    })
+
                     console.log("OTP verify result:", data);
-
-                    if (data?.success) {
+                    if (data) {
                         await loginWithPassword(formData.email, formData.password);
                         setFormData((prev) => ({
                         ...prev,
