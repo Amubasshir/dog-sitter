@@ -1,13 +1,17 @@
 import { CreditCard, Dog, Heart, MapPin, Shield, User, X } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
     addClientDog,
     registerClientProfile,
     registerSitterProfile,
 } from "../../lib/api";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase, supabaseAnonKey, supabaseUrl } from "../../lib/supabaseClient";
 import { NEIGHBORHOODS } from "../../types";
+
+
+// https://zlbklfngxsgkqidarwdr.supabase.co/functions/v1/verify-otp
+// https://zlbklfngxsgkqidarwdr.supabase.co/functions/v1/signup-with-otp
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,6 +27,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
   const [step, setStep] = useState<
     "choice" | "login" | "client-register" | "sitter-register"
   >("choice");
+//   const [currentStep, setCurrentStep] = useState(1);
   const [currentStep, setCurrentStep] = useState(1);
   const [userType, setUserType] = useState<"client" | "sitter" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +38,9 @@ const AuthModal: React.FC<AuthModalProps> = ({
     phone: "",
     verificationCode: "",
     password: "",
+    isVerified: false,
+
+    userId: "",
 
     // Client specific
     dogName: "",
@@ -60,6 +68,28 @@ const AuthModal: React.FC<AuthModalProps> = ({
     bankName: "",
   });
 
+
+    // 1️⃣ Load from localStorage on mount
+    useEffect(() => {
+        const savedData = localStorage.getItem("dogSitterForm");
+        if (savedData) {
+          try {
+            setFormData(JSON.parse(savedData));
+          } catch (err) {
+            console.error("Error parsing dogSitterForm from localStorage:", err);
+          }
+        }
+      }, [isOpen]);
+    
+      // 2️⃣ Save to localStorage on every formData change
+      useEffect(() => {
+        if (formData && Object.keys(formData).length > 0) {
+          localStorage.setItem("dogSitterForm", JSON.stringify(formData));
+        }
+      }, [formData]);
+
+console.log({currentStep, formData, userType})
+
   const { loginWithPassword } = useAuth();
 
   if (!isOpen) return null;
@@ -86,7 +116,9 @@ const AuthModal: React.FC<AuthModalProps> = ({
       email: "",
       phone: "",
       verificationCode: "",
+      isVerified: false,
       password: "",
+      userId: "",
       dogName: "",
       dogBreed: "",
       dogAge: "",
@@ -111,7 +143,31 @@ const AuthModal: React.FC<AuthModalProps> = ({
     });
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    if(currentStep === 1) {
+        try {
+            const response = await fetch(`${supabaseUrl}/functions/v1/signup-with-otp`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseAnonKey}`, // Add this
+                  'apikey': supabaseAnonKey // Add this
+                },
+                body: JSON.stringify({
+                  email: formData.email,
+                  password: formData.password,
+                  name: formData.name
+                })
+              });
+          
+              const result = await response.json();
+              setFormData((prev) => ({ ...prev, userId: result.user_id }));
+              console.log('signup result:', result);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
     const maxSteps = step === "client-register" ? 4 : 5;
     if (currentStep < maxSteps) {
       setCurrentStep(currentStep + 1);
@@ -124,9 +180,37 @@ const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleFileChange = (field: string, file: File | null) => {
-    setFormData((prev) => ({ ...prev, [field]: file }));
+//   const handleFileChange = (field: string, file: File | null) => {
+//     setFormData((prev) => ({ ...prev, [field]: file }));
+//   };
+
+const handleFileChange = async (field: string, file: File | null) => {
+    if (!file) return;
+  
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `uploads/${fileName}`; // 👈 change folder name if needed
+  
+      // Upload to Supabase Storage
+      const { error } = await supabase.storage
+        .from("images") // 👈 replace with your bucket name
+        .upload(filePath, file);
+  
+      if (error) throw error;
+  
+      // Get public URL
+      const { data } = supabase.storage.from("images").getPublicUrl(filePath);
+  
+      const url = data.publicUrl;
+  
+      // Update formData with the uploaded image URL
+      setFormData((prev) => ({ ...prev, [field]: url }));
+    } catch (err: any) {
+      console.error("File upload error:", err.message);
+    }
   };
+  
 
   const renderChoice = () => (
     <div className="p-6">
@@ -290,6 +374,21 @@ const AuthModal: React.FC<AuthModalProps> = ({
           />
         </div>
 
+          <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            סיסמה
+          </label>
+          <input
+            type="password"
+            value={formData.password}
+            onChange={(e) =>
+                setFormData((prev) => ({ ...prev, password: e.target.value }))
+            }
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="••••••••"
+            />
+        </div>
+        
         {/* <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             קוד אימות *
@@ -311,20 +410,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
             קוד אימות נשלח לכתובת המייל שהזנת
           </p>
         </div> */}
-          <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            סיסמה
-          </label>
-          <input
-            type="password"
-            value={formData.password}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, password: e.target.value }))
-            }
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="••••••••"
-          />
-        </div>
       </div>
     );
 
@@ -334,6 +419,83 @@ const AuthModal: React.FC<AuthModalProps> = ({
           <Dog className="w-5 h-5" />
           פרופיל כלב
         </h3>
+
+            <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+                קוד אימות *
+            </label>
+
+            <div className="flex gap-2">
+                {/* OTP Input */}
+                <input
+                type="text"
+                disabled={formData?.isVerified}
+                value={ formData?.isVerified ? "קוד אימות תקין" : formData.verificationCode}
+                onChange={(e) =>
+                    setFormData((prev) => ({
+                    ...prev,
+                    verificationCode: e.target.value,
+                    }))
+                }
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="הזן קוד שנשלח למייל"
+                required
+                />
+
+                {/* Verify Button */}
+                {!formData?.isVerified && <button
+                type="button"
+                onClick={async () => {
+                    try {
+                    // const res = await fetch(
+                    //     `${supabaseUrl}/functions/v1/verify-otp`,
+                    //     {
+                    //     method: "POST",
+                    //     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseAnonKey}`, "apikey": supabaseAnonKey },
+                    //     body: JSON.stringify({
+                    //         user_id: formData.userId,
+                    //         otp: formData.verificationCode,
+                    //         // password: formData.password, // 👈 ensure you have this in formData
+                    //     }),
+                    //     }
+                    // );
+                        
+                    // const data = await res.json();
+
+                    const {data, error} = await supabase.auth.verifyOtp({
+                        email: formData.email,
+                        token: formData.verificationCode,
+                        type: "signup",
+                    })
+
+                    console.log("OTP verify result:", data);
+
+                    if (data) {
+                        await loginWithPassword(formData.email, formData.password);
+                        setFormData((prev) => ({
+                        ...prev,
+                        verificationCode: formData.verificationCode,
+                        isVerified: true,
+                        }));
+                    } else {
+                        alert("קוד לא תקין, נסה שוב.");
+                    }
+                    } catch (err) {
+                    console.error("OTP verify error:", err);
+                    alert("שגיאה באימות הקוד");
+                    }
+                }}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                אמת
+                </button>}
+            </div>
+
+            <p className="text-xs text-gray-500 mt-1">
+                קוד אימות נשלח לכתובת המייל שהזנת
+            </p>
+            </div>
+
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -641,6 +803,76 @@ const AuthModal: React.FC<AuthModalProps> = ({
           <Shield className="w-5 h-5" />
           אימות זהות ואמון
         </h3>
+
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+                קוד אימות *
+            </label>
+
+            <div className="flex gap-2">
+                {/* OTP Input */}
+                <input
+                type="text"
+                disabled={formData?.isVerified}
+                value={ formData?.isVerified ? "קוד אימות תקין" : formData.verificationCode}
+                onChange={(e) =>
+                    setFormData((prev) => ({
+                    ...prev,
+                    verificationCode: e.target.value,
+                    }))
+                }
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="הזן קוד שנשלח למייל"
+                required
+                />
+
+                {/* Verify Button */}
+                {!formData?.isVerified && <button
+                type="button"
+                onClick={async () => {
+                    try {
+                    const res = await fetch(
+                        `${supabaseUrl}/functions/v1/verify-otp`,
+                        {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseAnonKey}`, "apikey": supabaseAnonKey },
+                        body: JSON.stringify({
+                            user_id: formData.userId,
+                            otp: formData.verificationCode,
+                            // password: formData.password, // 👈 ensure you have this in formData
+                        }),
+                        }
+                    );
+
+                    const data = await res.json();
+                    console.log("OTP verify result:", data);
+
+                    if (data?.success) {
+                        await loginWithPassword(formData.email, formData.password);
+                        setFormData((prev) => ({
+                        ...prev,
+                        verificationCode: formData.verificationCode,
+                        isVerified: true,
+                        }));
+                    } else {
+                        alert("קוד לא תקין, נסה שוב.");
+                    }
+                    } catch (err) {
+                    console.error("OTP verify error:", err);
+                    alert("שגיאה באימות הקוד");
+                    }
+                }}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                אמת
+                </button>}
+            </div>
+
+            <p className="text-xs text-gray-500 mt-1">
+                קוד אימות נשלח לכתובת המייל שהזנת
+            </p>
+            </div>
+
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1037,13 +1269,14 @@ const AuthModal: React.FC<AuthModalProps> = ({
             formData.phone &&
             // formData.verificationCode
             formData.password
-          );
+        );
         case 2:
-          return (
-            formData.dogName &&
-            formData.dogBreed &&
-            formData.dogAge &&
-            formData.dogImage
+            return (
+                formData.dogName &&
+                formData.dogBreed &&
+                formData.dogAge &&
+                formData.isVerified &&
+                formData.dogImage
           );
         case 3:
           return formData.neighborhood;
@@ -1064,7 +1297,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
             formData.profileImage
           );
         case 2:
-          return formData.idImage && formData.selfieImage;
+          return formData.idImage && formData.selfieImage && formData.isVerified;
         case 3:
           return (
             formData.neighborhoods.length > 0 &&
@@ -1157,32 +1390,38 @@ const AuthModal: React.FC<AuthModalProps> = ({
                     console.log({formData})
                   if (step === "client-register") {
                     // Sign up and create client profile + dog
-                    const { data, error } = await supabase.auth.signUp({
-                      email: formData.email,
-                      password: formData.password || crypto.randomUUID(),
-                      options: { data: { name: formData.name } },
-                    });
+                    // const { data, error } = await supabase.auth.signUp({
+                    //   email: formData.email,
+                    //   password: formData.password || crypto.randomUUID(),
+                    //   options: { data: { name: formData.name } },
+                    // });
 
-                    console.log("signup data", {data, error})
-                    if (error) return;
-                    await registerClientProfile({
+                    // console.log("signup data", {data, error})
+                    // if (error) return;
+                    const clientData = await registerClientProfile({
                       name: formData.name,
                       email: formData.email,
                       phone: formData.phone,
                       neighborhood: formData.neighborhood,
                     });
-                    await addClientDog({
-                      client_id: data.user!.id,
-                      name: formData.dogName,
-                      breed: formData.dogBreed,
-                      age: Number(formData.dogAge),
-                      size: "large",
-                      image: undefined,
-                      additional_info: formData.dogInfo,
+                    if (!clientData) return;
+
+                    setTimeout(async () => {
+                        
+                        await addClientDog({
+                            //   client_id: data.user!.id,
+                            client_id: formData.userId,
+                            name: formData.dogName,
+                            breed: formData.dogBreed,
+                            age: Number(formData.dogAge),
+                            size: "large",
+                            image: formData.dogImage,
+                            additional_info: formData.dogInfo,
                     });
                     onSuccess?.();
                     onClose();
                     resetForm();
+                }, 1000);
                   } else {
                     // Sitter register
                     const enabledServices: Array<{
@@ -1210,12 +1449,12 @@ const AuthModal: React.FC<AuthModalProps> = ({
                           Number(formData.services.home_visit.price) * 100
                         ),
                       });
-                    const { error } = await supabase.auth.signUp({
-                      email: formData.email,
-                      password: formData.password || crypto.randomUUID(),
-                      options: { data: { name: formData.fullName } },
-                    });
-                    if (error) return;
+                    // const { error } = await supabase.auth.signUp({
+                    //   email: formData.email,
+                    //   password: formData.password || crypto.randomUUID(),
+                    //   options: { data: { name: formData.fullName } },
+                    // });
+                    // if (error) return;
                     await registerSitterProfile({
                       fullName: formData.fullName,
                       email: formData.email,

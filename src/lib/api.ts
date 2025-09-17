@@ -35,7 +35,14 @@ export async function registerClientProfile({
     user_type: "client",
     neighborhood,
   });
+
+//   const {data: userData, error: userError} = await supabase.from("profiles").select("id").eq("id", user.id).single();
+//   if (userError) throw userError;
+
+//   console.log({userData, userError})
   await supabase.from("clients").upsert({ profile_id: user.id });
+  return true;
+//   return userData;
 }
 
 export async function addClientDog(input: {
